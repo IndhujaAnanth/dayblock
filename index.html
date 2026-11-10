@@ -35,6 +35,19 @@
 :root[data-color="on"][data-bg="black"],:root[data-color="on"][data-bg="charcoal"]{--bgL:19%; --inkL:86%}
 .mark{filter:grayscale(1)}
 :root[data-color="on"] .mark{filter:none}
+.task.hasc{box-shadow:inset 4px 0 0 var(--tc)}
+.task.hasc .ttl{color:var(--tc)}
+.task.hasc .chk span{border-color:var(--tc)}
+.task.hasc .chk input:checked+span{background:var(--tc)}
+.task.hasc.done .ttl{color:var(--ink2)}
+.blk li button[style*="--tc"]{border-color:var(--tc);color:var(--tc)}
+.tblk[style*="--tc"]{border-color:var(--tc);border-left-color:var(--tc)}
+.chk.part span::after{content:"";width:10px;height:3px;border-radius:2px;background:var(--sline,var(--accent))}
+.shead .secall{margin-right:2px}
+.blk > header{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.bgrip{opacity:.6}
+.tbox{display:flex;align-items:center;gap:8px}
+.tbox .field{width:72px;text-align:center}
 .swatches{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .sw{width:32px;height:32px;border-radius:50%;border:2px solid var(--line);background:var(--c);padding:0}
 .sw[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
@@ -403,6 +416,17 @@ function need(dates){
   if(yms.length)Promise.all(yms.map(ensureMonth)).then(function(){render()});
 }
 function doneKey(date,id,sub){return date+'|'+id+(sub?'|'+sub:'')}
+function setDoneMany(date,items,val){
+  var ym=date.slice(0,7);
+  return ensureMonth(ym).then(function(){
+    var m=state.done[ym];
+    items.forEach(function(t){
+      var ks=[doneKey(date,t.id)].concat((t.subs||[]).map(function(sb){return doneKey(date,t.id,sb.id)}));
+      ks.forEach(function(k){if(val)m[k]=1;else delete m[k]});
+    });
+    saveDone(ym);render();
+  });
+}
 function isDone(date,id,sub){var m=state.done[date.slice(0,7)];return !!(m&&m[doneKey(date,id,sub)])}
 function setDone(date,id,sub,val){
   var ym=date.slice(0,7);
@@ -545,9 +569,9 @@ function monthView(mode){
     if(mode==='study'){
       state.study.filter(function(e){return e.date===d}).forEach(function(e){names.push({t:(e.subject||'')+(e.chapter?' · '+e.chapter:''),done:e.done})});
     }else{
-      tasksOn(d).filter(function(t){return t.star}).forEach(function(t){names.push({t:t.title,done:isDone(d,t.id)});if(/exam/i.test(t.title))exam=true});
+      tasksOn(d).filter(function(t){return t.star}).forEach(function(t){names.push({t:t.title,done:isDone(d,t.id),c:t.color});if(/exam/i.test(t.title))exam=true});
     }
-    var body=names.length?'<div class="ct">'+names.map(function(n){return '<span'+(n.done?' class="ds"':'')+'>'+esc(n.t)+'</span>'}).join('')+'</div>':'<div class="ct"></div>';
+    var body=names.length?'<div class="ct">'+names.map(function(n){return '<span'+(n.done?' class="ds"':'')+(n.c&&!exam?' style="color:'+n.c+'"':'')+'>'+esc(n.t)+'</span>'}).join('')+'</div>':'<div class="ct"></div>';
     return '<button type="button" class="cell'+(inM?'':' out')+(exam?' exam':'')+(d===today?' today':'')+(d===(mode==='study'?ui.studyDate:ui.date)&&mode==='study'?' sel':'')+'" data-act="'+(mode==='study'?'study-pick':'open-day')+'" data-date="'+d+'" aria-label="'+esc(fmtLong(d))+'"><span class="dn">'+parse(d).getDate()+'</span>'+body+'</button>';
   }).join('');
   var head=barHTML(MN[m]+' '+y,'nav-m-1','nav-m1',mode==='study'?studySeg():'');
@@ -564,9 +588,9 @@ function weekView(mode){
     if(mode==='study'){
       state.study.filter(function(e){return e.date===d}).forEach(function(e){names.push({t:(e.subject||'')+(e.chapter?' \u00b7 '+e.chapter:''),done:e.done})});
     }else{
-      tasksOn(d).filter(function(t){return t.star}).forEach(function(t){names.push({t:t.title,done:isDone(d,t.id)});if(/exam/i.test(t.title))exam=true});
+      tasksOn(d).filter(function(t){return t.star}).forEach(function(t){names.push({t:t.title,done:isDone(d,t.id),c:t.color});if(/exam/i.test(t.title))exam=true});
     }
-    var body='<div class="ct">'+names.map(function(n){return '<span'+(n.done?' class="ds"':'')+'>'+esc(n.t)+'</span>'}).join('')+'</div>';
+    var body='<div class="ct">'+names.map(function(n){return '<span'+(n.done?' class="ds"':'')+(n.c&&!exam?' style="color:'+n.c+'"':'')+'>'+esc(n.t)+'</span>'}).join('')+'</div>';
     return '<button type="button" class="cell wkc'+(exam?' exam':'')+(d===today?' today':'')+'" data-act="'+(mode==='study'?'study-pick':'open-day')+'" data-date="'+d+'" aria-label="'+esc(fmtLong(d))+'"><span class="dn">'+parse(d).getDate()+'</span>'+body+'</button>';
   }).join('');
   return barHTML(label,'nav-w-1','nav-w1',mode==='study'?studySeg():'')+'<div class="calw"><div class="calin"><div class="dow">'+MON_FIRST.map(function(i){return '<span>'+DN[i]+'</span>'}).join('')+'</div><div class="grid">'+cells+'</div></div></div>';
@@ -596,7 +620,8 @@ function todoBody(date){
     var r=ranges[s.id],items=ts.filter(function(t){return t.section===s.id});
     var dn=items.filter(function(t){return isDone(date,t.id)}).length;
     var rows=items.map(function(t){return taskRow(t,date)}).join('');
-    return '<section class="scard sec" data-section="'+s.id+'" style="--h:'+s.h+'"><div class="shead"><h3>'+s.name+'</h3><button type="button" class="tm" data-act="edit-time" data-sec="'+s.id+'" aria-label="Change start time of '+s.name+'">'+f12(r.start)+' – '+f12(r.end)+'</button><span class="ct">'+dn+'/'+items.length+'</span><button type="button" class="rmbtn" data-act="sec-hide" data-sec="'+s.id+'" aria-label="Remove '+s.name+' from this day">Remove</button></div>'
+    var allOn=items.length>0&&dn===items.length,partOn=dn>0&&dn<items.length;
+    return '<section class="scard sec" data-section="'+s.id+'" style="--h:'+s.h+'"><div class="shead"><label class="chk secall'+(partOn?' part':'')+'" title="Tick everything in '+s.name.toLowerCase()+'"><input type="checkbox" data-chg="sec-all" data-sec="'+s.id+'"'+(allOn?' checked':'')+(items.length?'':' disabled')+' aria-label="Tick all of '+s.name+'"><span></span></label><h3>'+s.name+'</h3><button type="button" class="tm" data-act="edit-time" data-sec="'+s.id+'" aria-label="Change start time of '+s.name+'">'+f12(r.start)+' – '+f12(r.end)+'</button><span class="ct">'+dn+'/'+items.length+'</span><button type="button" class="rmbtn" data-act="sec-hide" data-sec="'+s.id+'" aria-label="Remove '+s.name+' from this day">Remove</button></div>'
       +(items.length?'<ul class="tasks">'+rows+'</ul>':'<div class="empty">Nothing here yet.</div>')
       +'<form class="addrow" data-addform="'+s.id+'" autocomplete="off"><input class="addin" id="add-'+s.id+'" data-sec="'+s.id+'" enterkeyhint="done" placeholder="Add to '+s.name.toLowerCase()+'" aria-label="Add task to '+s.name+'"><button type="submit" class="btn primary">Add</button><button type="button" class="btn" data-act="new-task" data-sec="'+s.id+'">More</button></form></section>';
   }).join('');
@@ -615,7 +640,7 @@ function taskRow(t,date){
     subs='<ul class="subs">'+t.subs.map(function(s){var d=isDone(date,t.id,s.id);return '<li class="'+(d?'done':'')+'"><label class="chk"><input type="checkbox" data-chg="toggle-sub" data-id="'+t.id+'" data-sub="'+s.id+'"'+(d?' checked':'')+' aria-label="'+esc(s.title)+'"><span></span></label><span class="tx">'+esc(s.title)+'</span></li>'}).join('')
       +'<li><input class="addin" id="sub-'+t.id+'" data-subadd="'+t.id+'" placeholder="Add a subtask and press Enter" aria-label="Add subtask"></li></ul>';
   }
-  return '<li class="task'+(done?' done':'')+'" data-id="'+t.id+'"><button type="button" class="grip" id="grip-'+t.id+'" aria-label="Move '+esc(t.title)+'. Drag, or use the up and down arrow keys." title="Drag to reorder">\u283f</button><label class="chk"><input type="checkbox" data-chg="toggle" data-id="'+t.id+'"'+(done?' checked':'')+' aria-label="Done: '+esc(t.title)+'"><span></span></label><button type="button" class="ttl" data-act="edit-task" data-id="'+t.id+'">'+esc(t.title)+'</button><button type="button" class="starb" data-act="star" data-id="'+t.id+'" aria-pressed="'+(t.star?'true':'false')+'" aria-label="'+(t.star?'Remove from important':'Mark important')+'" title="Mark important">'+(t.star?'\u2605':'\u2606')+'</button>'+tags+subsBtn+subs+'</li>';
+  return '<li class="task'+(done?' done':'')+(t.color?' hasc':'')+'" data-id="'+t.id+'"'+taskColorStyle(t)+'><button type="button" class="grip" id="grip-'+t.id+'" aria-label="Move '+esc(t.title)+'. Drag, or use the up and down arrow keys." title="Drag to reorder">\u283f</button><label class="chk"><input type="checkbox" data-chg="toggle" data-id="'+t.id+'"'+(done?' checked':'')+' aria-label="Done: '+esc(t.title)+'"><span></span></label><button type="button" class="ttl" data-act="edit-task" data-id="'+t.id+'">'+esc(t.title)+'</button><button type="button" class="starb" data-act="star" data-id="'+t.id+'" aria-pressed="'+(t.star?'true':'false')+'" aria-label="'+(t.star?'Remove from important':'Mark important')+'" title="Mark important">'+(t.star?'\u2605':'\u2606')+'</button>'+tags+subsBtn+subs+'</li>';
 }
 function scheduleBody(date){
   var ranges=sectionRanges(date),ts=tasksOn(date),today=todayStr();
@@ -628,8 +653,8 @@ function scheduleBody(date){
     var items=ts.filter(function(t){return t.section===s.id&&!t.time});
     var hasTimed=timed.some(function(t){return t.section===s.id});
     var bh=Math.max((r.end-r.start)/60*HOUR_H-3,34);
-    var chips=items.map(function(t){var d=isDone(date,t.id);return '<li class="'+(d?'done':'')+'"><button type="button" data-act="toggle-btn" data-id="'+t.id+'" aria-pressed="'+d+'">'+esc(t.title)+'</button></li>'}).join('');
-    return '<div class="blk sec" style="--h:'+s.h+';top:'+(r.start/60*HOUR_H+1)+'px;height:'+bh+'px;right:6px"><header'+(hasTimed?' style="max-width:57%"':'')+'><h3>'+s.name+'</h3><span><button type="button" class="tm" data-act="edit-time" data-sec="'+s.id+'">'+f12(r.start)+' – '+f12(r.end)+'</button> <button type="button" class="tm" data-act="sec-hide" data-sec="'+s.id+'">Remove</button></span></header>'+(chips?'<ul'+(hasTimed?' style="max-width:56%"':'')+'>'+chips+'</ul>':'')+'</div>';
+    var chips=items.map(function(t){var d=isDone(date,t.id);return '<li class="'+(d?'done':'')+'"><button type="button" data-act="toggle-btn" data-id="'+t.id+'" aria-pressed="'+d+'"'+taskColorStyle(t)+'>'+esc(t.title)+'</button></li>'}).join('');
+    return '<div class="blk sec" data-sec="'+s.id+'" style="--h:'+s.h+';top:'+(r.start/60*HOUR_H+1)+'px;height:'+bh+'px;right:6px"><header'+(hasTimed?' style="max-width:57%"':'')+' title="Drag up or down to change the time"><h3><span class="bgrip" aria-hidden="true">\u283f</span> '+s.name+'</h3><span><button type="button" class="tm" data-act="edit-time" data-sec="'+s.id+'">'+f12(r.start)+' – '+f12(r.end)+'</button> <button type="button" class="tm" data-act="sec-hide" data-sec="'+s.id+'">Remove</button></span></header>'+(chips?'<ul'+(hasTimed?' style="max-width:56%"':'')+'>'+chips+'</ul>':'')+'</div>';
   }).join('');
   var tb='';
   if(timed.length){
@@ -643,7 +668,7 @@ function scheduleBody(date){
     var nc=Math.max.apply(null,sorted.map(function(t){return t._c}))+1;
     tb=sorted.map(function(t){
       var s0=toMin(t.time.s),w=38/nc;
-      return '<button type="button" class="tblk sec'+(isDone(date,t.id)?' done':'')+'" data-act="toggle-btn" data-id="'+t.id+'" style="--h:'+SEC[t.section].h+';top:'+(s0/60*HOUR_H+1)+'px;height:'+Math.max((t._e-s0)/60*HOUR_H-3,26)+'px;left:'+(60+t._c*w)+'%;width:calc('+w+'% - 6px)"><b>'+esc(t.title)+'</b><br><small>'+f12(s0)+' – '+f12(t._e)+'</small></button>';
+      return '<button type="button" class="tblk sec'+(isDone(date,t.id)?' done':'')+'" data-act="toggle-btn" data-id="'+t.id+'" style="'+(t.color?'--tc:'+t.color+';':'')+'--h:'+SEC[t.section].h+';top:'+(s0/60*HOUR_H+1)+'px;height:'+Math.max((t._e-s0)/60*HOUR_H-3,26)+'px;left:'+(60+t._c*w)+'%;width:calc('+w+'% - 6px)"><b>'+esc(t.title)+'</b><br><small>'+f12(s0)+' – '+f12(t._e)+'</small></button>';
     }).join('');
   }
   var now='';
@@ -651,7 +676,7 @@ function scheduleBody(date){
   var hid=SECTIONS.filter(function(s){return !secVisible(date,s.id)});
   var hidRow=hid.length?'<div class="hiddenrow">Hidden parts of the day: '+hid.map(function(s){return '<button type="button" class="chipb" data-act="sec-show" data-sec="'+s.id+'">Show '+s.name+'</button>'}).join('')+'</div>':'';
   return '<div class="schedwrap" id="schedwrap"><div class="sched" style="height:'+(24*HOUR_H)+'px">'+lines+blocks+tb+now+'</div></div>'
-    +'<p class="more" style="margin-top:8px">Tap a task to tick it. Tap a section time to change when it starts. A task with its own time sits inside its section at that time.</p>'+hidRow;
+    +'<p class="more" style="margin-top:8px">Tap a task to tick it. Drag a section up or down to move it, or tap its time to type one. A task with its own time sits inside its section at that time.</p>'+hidRow;
 }
 
 /* ---------- move between sections ---------- */
@@ -1098,6 +1123,7 @@ function openModal(m){ui.modal=m;renderModal()}
 function closeModal(){
   if(ui.modal&&ui.modal.kind==='note')edFlush();
   var was=ui.modal;ui.modal=null;ui.edRange=null;$('#modal').innerHTML='';
+  if(was&&was.fromDrag&&ui.ready)render();
   if(was&&was.kind==='note'){
     var n=getNote(was.id);
     if(n&&noteEmpty(n)){state.notes=state.notes.filter(function(x){return x.id!==n.id});saveNotes()}
@@ -1126,10 +1152,10 @@ function chip(act,attrs,label,pressed){return '<button type="button" class="chip
 function draftFromTask(t){
   var r=t.rule,kind='once';
   if(r.kind!=='once')kind=(r.unit==='day'&&r.every===1)?'daily':(r.unit==='week'&&r.every===1)?'weekly':'custom';
-  return {title:t.title,section:t.section,star:t.star,kind:kind,days:(r.days&&r.days.length)?r.days.slice():[wd(t.start)],every:r.every||1,unit:r.unit||'week',durKind:t.until?'date':'forever',durN:4,durUnit:'weeks',untilDate:t.until||'',ts:t.time?t.time.s:'',te:t.time?t.time.e:'',subs:t.subs.map(function(s){return {id:s.id,title:s.title}})};
+  return {title:t.title,section:t.section,star:t.star,color:t.color||'',kind:kind,days:(r.days&&r.days.length)?r.days.slice():[wd(t.start)],every:r.every||1,unit:r.unit||'week',durKind:t.until?'date':'forever',durN:4,durUnit:'weeks',untilDate:t.until||'',ts:t.time?t.time.s:'',te:t.time?t.time.e:'',subs:t.subs.map(function(s){return {id:s.id,title:s.title}})};
 }
 function newDraft(sec,date){
-  return {title:'',section:sec,star:false,kind:'once',days:[wd(date)],every:1,unit:'week',durKind:'forever',durN:4,durUnit:'weeks',untilDate:'',ts:'',te:'',subs:[]};
+  return {title:'',section:sec,star:false,color:'',kind:'once',days:[wd(date)],every:1,unit:'week',durKind:'forever',durN:4,durUnit:'weeks',untilDate:'',ts:'',te:'',subs:[]};
 }
 function openTaskModal(t,date,sec){
   if(t){
@@ -1137,6 +1163,13 @@ function openTaskModal(t,date,sec){
     openModal({kind:'task',isNew:false,taskId:t.id,date:date,repeating:rep,scope:rep?'all':'all',draft:draftFromTask(t)});
   }else openModal({kind:'task',isNew:true,date:date,repeating:false,scope:'new',draft:newDraft(sec,date)});
 }
+function colourField(d){
+  var cur=d.color||'';
+  var sw='<button type="button" class="sw auto" data-act="t-color" data-v="" aria-label="No colour" aria-pressed="'+(!cur)+'"></button>'
+    +SWATCHES.map(function(c){return '<button type="button" class="sw" style="--c:'+c+'" data-act="t-color" data-v="'+c+'" aria-label="Colour '+c+'" aria-pressed="'+(cur===c)+'"></button>'}).join('');
+  return '<div class="fl">Colour of this task (optional)<div class="swatches" id="tcol">'+sw+'<label class="row" style="gap:6px">Custom <input type="color" data-tcolor="1" value="'+(cur||'#ffffff')+'" aria-label="Custom task colour"></label></div></div>';
+}
+function taskColorStyle(t){return t.color&&/^#[0-9a-f]{6}$/i.test(t.color)?' style="--tc:'+t.color+'"':''}
 function taskModal(m){
   var d=m.draft,onlyDay=(m.repeating&&m.scope==='day');
   var secOpts=SECTIONS.map(function(s){return '<option value="'+s.id+'"'+(d.section===s.id?' selected':'')+'>'+s.name+'</option>'}).join('');
@@ -1166,16 +1199,38 @@ function taskModal(m){
     +'<label class="fl">Part of the day<select class="field" data-bind="section" data-rerender="1">'+secOpts+'</select></label>'
     +scope+rep+time
     +'<label class="row"><input type="checkbox" data-bind="star"'+(d.star?' checked':'')+'> Mark as important (shows on the calendar)</label>'
+    +colourField(d)
     +subs
     +'<div class="foot">'+(m.isNew?'':'<button type="button" class="btn danger left" data-act="m-delete">Delete</button>')+'<button type="button" class="btn" data-act="close">Cancel</button><button type="button" class="btn primary" data-act="m-save">Save</button></div>';
 }
+function secNeighbors(date,id){
+  var rg=sectionRanges(date),arr=Object.keys(rg).map(function(k){return {id:k,start:rg[k].start,end:rg[k].end,order:rg[k].order}}).sort(function(a,b){return a.order-b.order});
+  var i=arr.map(function(x){return x.id}).indexOf(id);
+  return {cur:arr[i],prev:arr[i-1]||null,next:arr[i+1]||null,nn:arr[i+2]||null};
+}
+function t12(min){var h=Math.floor(min/60)%24,mi=min%60,ap=h>=12?'PM':'AM';h=h%12||12;return {h:h,m:mi,ap:ap}}
+function from12(h,mi,ap){h=h%12;if(ap==='PM')h+=12;return h*60+mi}
+function hmStr(min){return pad(Math.floor(min/60))+':'+pad(min%60)}
+function timeBox(id,min,ap){
+  var t=t12(min);
+  return '<div class="tbox"><input class="field" id="'+id+'-h" type="number" inputmode="numeric" min="1" max="12" value="'+t.h+'" aria-label="Hour"><span>:</span><input class="field" id="'+id+'-m" type="number" inputmode="numeric" min="0" max="59" value="'+pad(t.m)+'" aria-label="Minutes"><div class="seg" role="group" aria-label="AM or PM"><button type="button" data-act="tm-ap" data-box="'+id+'" data-v="AM" aria-pressed="'+(ap==='AM')+'">AM</button><button type="button" data-act="tm-ap" data-box="'+id+'" data-v="PM" aria-pressed="'+(ap==='PM')+'">PM</button></div></div>';
+}
 function timeModal(m){
-  var s=SEC[m.sec],cur=sectionTimes(m.date)[m.sec];
-  return '<h2>When does '+s.name.toLowerCase()+' start?</h2>'
-    +'<label class="fl">Start time<input class="field" data-first id="tm-val" type="time" value="'+cur+'"></label>'
+  var s=SEC[m.sec],nb=secNeighbors(m.date,m.sec);
+  if(m.sMin===undefined){m.sMin=nb.cur.start;m.eMin=nb.cur.end}
+  m.ap=m.ap||{s:t12(m.sMin).ap,e:t12(m.eMin).ap};
+  var endBox=nb.next?'<div class="fl">Ends at<span class="more">This is when the next part of the day ('+esc(SEC[nb.next.id].name.toLowerCase())+') starts.</span>'+timeBox('tm-e',m.eMin,m.ap.e)+'</div>'
+    :'<div class="fl">Ends at<span class="more">The last part of the day runs until midnight.</span></div>';
+  return '<h2>'+s.name+': when is it?</h2>'
+    +'<div class="fl">Starts at'+timeBox('tm-s',m.sMin,m.ap.s)+'</div>'
+    +endBox
     +'<div class="fl">Apply to<div class="seg" role="group"><button type="button" data-act="tm-scope" data-v="day" aria-pressed="'+(m.scope==='day')+'">Only '+esc(fmtShort(m.date))+'</button><button type="button" data-act="tm-scope" data-v="week" aria-pressed="'+(m.scope==='week')+'">Every '+DFULL[wd(m.date)]+'</button></div></div>'
-    +'<p class="more" style="margin:0">This section runs until the next one starts, so the grid always fills the day.</p>'
     +'<div class="foot"><button type="button" class="btn left" data-act="tm-reset">Reset to default</button><button type="button" class="btn" data-act="close">Cancel</button><button type="button" class="btn primary" data-act="tm-save">Save</button></div>';
+}
+function readTimeBox(id,ap){
+  var h=parseInt(($('#'+id+'-h')||{}).value,10),mi=parseInt(($('#'+id+'-m')||{}).value,10);
+  if(!(h>=1&&h<=12)||!(mi>=0&&mi<=59))return null;
+  return from12(h,mi,ap);
 }
 function deleteModal(m){
   var t=state.tasks.filter(function(x){return x.id===m.taskId})[0];
@@ -1235,7 +1290,7 @@ function saveModalTask(){
   var title=d.title.trim();
   if(m.isNew){
     var r=ruleFromDraft(d,m.date);
-    state.tasks.push({id:uid(),title:title,section:d.section,star:d.star,start:m.date,until:r.until,rule:r.rule,skip:[],subs:subs,time:timeOf(d)});
+    state.tasks.push({id:uid(),title:title,section:d.section,star:d.star,color:d.color||null,start:m.date,until:r.until,rule:r.rule,skip:[],subs:subs,time:timeOf(d)});
   }else{
     var t=state.tasks.filter(function(x){return x.id===m.taskId})[0];
     if(!t){closeModal();return}
@@ -1243,7 +1298,7 @@ function saveModalTask(){
       t.skip=(t.skip||[]).concat([m.date]);
       var nid=uid();
       var idMap={};subs.forEach(function(s){var nsid=uid();idMap[s.id]=nsid;s.id=nsid});
-      state.tasks.push({id:nid,title:title,section:d.section,star:d.star,start:m.date,until:null,rule:{kind:'once'},skip:[],subs:subs,time:timeOf(d)});
+      state.tasks.push({id:nid,title:title,section:d.section,star:d.star,color:d.color||null,start:m.date,until:null,rule:{kind:'once'},skip:[],subs:subs,time:timeOf(d)});
       var ym=m.date.slice(0,7),dm=state.done[ym]||{};
       Object.keys(dm).forEach(function(k){
         var p=k.split('|');
@@ -1255,7 +1310,7 @@ function saveModalTask(){
       saveDone(ym);
     }else{
       var r2=ruleFromDraft(d,t.start);
-      t.title=title;t.section=d.section;t.star=d.star;t.subs=subs;t.time=timeOf(d);t.rule=r2.rule;t.until=r2.until;
+      t.title=title;t.section=d.section;t.star=d.star;t.color=d.color||null;t.subs=subs;t.time=timeOf(d);t.rule=r2.rule;t.until=r2.until;
     }
   }
   saveTasks();closeModal();render();toast('Saved');
@@ -1323,6 +1378,7 @@ document.addEventListener('click',function(e){
     case 'edit-task':{var t=state.tasks.filter(function(x){return x.id===el.dataset.id})[0];if(t)openTaskModal(t,ui.date);break}
     case 'new-task':openTaskModal(null,ui.date,el.dataset.sec);break;
     case 'edit-time':openModal({kind:'time',sec:el.dataset.sec,date:ui.date,scope:'day'});break;
+    case 'tm-ap':{m.ap=m.ap||{};m.ap[el.dataset.box==='tm-s'?'s':'e']=el.dataset.v;[].slice.call(document.querySelectorAll('[data-act=tm-ap][data-box='+el.dataset.box+']')).forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.v===el.dataset.v))});break}
     case 'routines':openModal({kind:'routines'});break;
     case 'sec-hide':openModal({kind:'secvis',sec:el.dataset.sec,date:ui.date,mode:'hide'});break;
     case 'sec-show':openModal({kind:'secvis',sec:el.dataset.sec,date:ui.date,mode:'show'});break;
@@ -1351,6 +1407,7 @@ document.addEventListener('click',function(e){
     case 'nf':ui.nf.kind=el.dataset.v;render();break;
     case 'star':{var st=getTask(el.dataset.id);if(st){st.star=!st.star;saveTasks();render()}break}
     case 'backup':openModal({kind:'backup'});break;
+    case 't-color':{if(!m||!m.draft)break;m.draft.color=el.dataset.v||'';[].slice.call(document.querySelectorAll('#tcol .sw')).forEach(function(b){b.setAttribute('aria-pressed',String((b.dataset.v||'')===(el.dataset.v||'')))});var ci=document.querySelector('#tcol input[type=color]');if(ci&&el.dataset.v)ci.value=el.dataset.v;break}
     case 'settings':openModal({kind:'settings'});break;
     case 'pref-bg':setPrefs({bg:el.dataset.v});renderModal();break;
     case 'pref-accent':setPrefs({accent:el.dataset.v==='auto'?null:el.dataset.v});renderModal();break;
@@ -1358,7 +1415,6 @@ document.addEventListener('click',function(e){
     case 'move-do':doMove(m.id,m.date,m.sec,m.idx,el.dataset.v);break;
     case 'snap-restore':{
       var si=parseInt(el.dataset.i,10);
-      if(m.snapConfirm!==si){m.snapConfirm=si;m.noFocus=true;renderModal();m.noFocus=false;break}
       var sn=state.snaps[si];
       try{maybeSnapshot(true);restoreBackup(sn.json);ui.modal=null;$('#modal').innerHTML='';render();toast('Restored from '+fmtShort(sn.d))}
       catch(err){m.snapConfirm=null;renderModal();toast('Could not restore that backup.')}
@@ -1373,8 +1429,7 @@ document.addEventListener('click',function(e){
       var txt=(m.pasted||'').trim();
       if(!txt){toast('Paste a backup first.');break}
       try{JSON.parse(txt)}catch(err){toast('That text is not a valid backup.');break}
-      if(!m.confirm){m.confirm=true;m.noFocus=true;renderModal();m.noFocus=false;break}
-      try{maybeSnapshot(true);restoreBackup(txt);ui.modal=null;$('#modal').innerHTML='';render();toast('Restored')}catch(err){m.confirm=false;renderModal();toast('That text is not a valid backup.')}
+      try{maybeSnapshot(true);restoreBackup(txt);ui.modal=null;$('#modal').innerHTML='';render();toast('Restored. Your earlier data was kept as an automatic backup.')}catch(err){m.confirm=false;renderModal();toast('That text is not a valid backup.')}
       break}
     case 'm-sub-add':addModalSub();break;
     case 'm-time-fill':applyTimeDefault(m);renderModal();break;
@@ -1387,11 +1442,25 @@ document.addEventListener('click',function(e){
       else if(tk)deleteTask(m.taskId,m.date,'all');
       break}
     case 'del':deleteTask(m.taskId,m.date,el.dataset.v);break;
-    case 'tm-scope':m.scope=el.dataset.v;m.val=$('#tm-val').value;renderModal();$('#tm-val').value=m.val;break;
+    case 'tm-scope':m.scope=el.dataset.v;[].slice.call(document.querySelectorAll('[data-act=tm-scope]')).forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.v===m.scope))});break;
     case 'tm-save':{
-      var v=$('#tm-val').value;if(!v){toast('Pick a time.');break}
-      if(m.scope==='day'){(state.meta.dateTimes[m.date]=state.meta.dateTimes[m.date]||{})[m.sec]=v}
-      else{(state.meta.weekTimes[wd(m.date)]=state.meta.weekTimes[wd(m.date)]||{})[m.sec]=v;if(state.meta.dateTimes[m.date])delete state.meta.dateTimes[m.date][m.sec]}
+      var nb=secNeighbors(m.date,m.sec);
+      var sv=readTimeBox('tm-s',(m.ap||{}).s||'AM');
+      if(sv===null){toast('Type an hour from 1 to 12 and minutes from 0 to 59.');break}
+      var ev=null;
+      if(nb.next){
+        ev=readTimeBox('tm-e',(m.ap||{}).e||'AM');
+        if(ev===null){toast('Type an hour from 1 to 12 and minutes from 0 to 59.');break}
+        if(ev<=sv){toast('The end has to be after the start.');break}
+        if(nb.nn&&ev>=nb.nn.start){toast('That runs into '+SEC[nb.nn.id].name.toLowerCase()+', which starts at '+f12(nb.nn.start)+'.');break}
+      }
+      if(nb.prev&&sv<=nb.prev.start){toast('That starts before '+SEC[nb.prev.id].name.toLowerCase()+' does ('+f12(nb.prev.start)+').');break}
+      var put=function(id,v){
+        if(m.scope==='day'){(state.meta.dateTimes[m.date]=state.meta.dateTimes[m.date]||{})[id]=v}
+        else{(state.meta.weekTimes[wd(m.date)]=state.meta.weekTimes[wd(m.date)]||{})[id]=v;if(state.meta.dateTimes[m.date])delete state.meta.dateTimes[m.date][id]}
+      };
+      put(m.sec,hmStr(sv));
+      if(nb.next)put(nb.next.id,hmStr(ev));
       saveMeta();closeModal();render();toast('Time updated');break}
     case 'tm-reset':{
       if(state.meta.dateTimes[m.date])delete state.meta.dateTimes[m.date][m.sec];
@@ -1409,6 +1478,7 @@ document.addEventListener('change',function(e){
   if(el.dataset.chg){
     switch(el.dataset.chg){
       case 'toggle':setDone(ui.date,el.dataset.id,null,el.checked);break;
+      case 'sec-all':{var its=tasksOn(ui.date).filter(function(t){return t.section===el.dataset.sec});setDoneMany(ui.date,its,el.checked);break}
       case 'toggle-sub':setDone(ui.date,el.dataset.id,el.dataset.sub,el.checked);break;
       case 'qrep':ui.quickRep=el.value;break;
       case 'mf-sel':ui.mf[el.dataset.key]=el.value;var ml=$('#mlist');if(ml)ml.innerHTML=moneyListHTML();break;
@@ -1421,6 +1491,7 @@ document.addEventListener('change',function(e){
 });
 document.addEventListener('input',function(e){
   var el=e.target;
+  if(el.dataset&&el.dataset.tcolor&&ui.modal&&ui.modal.draft){ui.modal.draft.color=el.value;[].slice.call(document.querySelectorAll('#tcol .sw')).forEach(function(b){b.setAttribute('aria-pressed','false')});return}
   if(el.dataset&&el.dataset.pref){prefInput(el);return}
   if(el.dataset&&el.dataset.note==='title'){var tn=getNote(ui.modal&&ui.modal.id);if(tn){tn.title=el.value;tn.updated=Date.now();saveNotes()}return}
   if(el.dataset&&el.dataset.bkin){if(ui.modal)ui.modal.pasted=el.value;return}
@@ -1481,6 +1552,42 @@ document.addEventListener('keydown',function(e){
   else if(el.id==='st-chap'||el.id==='st-subj'||el.id==='st-mins'){e.preventDefault();addStudy()}
 });
 
+/* ---------- drag a section block to a new time ---------- */
+var bdrag=null;
+document.addEventListener('pointerdown',function(e){
+  if(e.button>0||(ui.modal))return;
+  var hd=e.target.closest&&e.target.closest('.blk > header');
+  if(!hd||e.target.closest('button'))return;
+  var blk=hd.parentNode,id=blk.dataset.sec;if(!id)return;
+  var nb=secNeighbors(ui.date,id);if(!nb.cur)return;
+  var lo=nb.prev?nb.prev.start+5:0;
+  var minD=lo-nb.cur.start,maxD;
+  if(nb.next)maxD=(nb.nn?nb.nn.start-5:1440)-nb.cur.end;else maxD=nb.cur.end-5-nb.cur.start;
+  bdrag={id:id,blk:blk,hd:hd,y0:e.clientY,s0:nb.cur.start,e0:nb.cur.end,hasNext:!!nb.next,minD:minD,maxD:maxD,d:0,pid:e.pointerId};
+  try{hd.setPointerCapture(e.pointerId)}catch(err){}
+  e.preventDefault();
+});
+document.addEventListener('pointermove',function(e){
+  if(!bdrag||e.pointerId!==bdrag.pid)return;
+  var d=Math.round((e.clientY-bdrag.y0)/HOUR_H*60/5)*5;
+  d=Math.max(bdrag.minD,Math.min(bdrag.maxD,d));
+  bdrag.d=d;
+  var ns=bdrag.s0+d,ne=bdrag.hasNext?bdrag.e0+d:bdrag.e0;
+  bdrag.blk.style.top=(ns/60*HOUR_H+1)+'px';
+  bdrag.blk.style.height=Math.max((ne-ns)/60*HOUR_H-3,34)+'px';
+  bdrag.blk.style.opacity='.85';bdrag.blk.style.zIndex='5';
+  var tm=bdrag.blk.querySelector('[data-act=edit-time]');if(tm)tm.textContent=f12(ns)+' \u2013 '+f12(ne);
+});
+function endBdrag(e,cancel){
+  if(!bdrag||(e&&e.pointerId!==bdrag.pid))return;
+  var b=bdrag;bdrag=null;
+  try{b.hd.releasePointerCapture(e.pointerId)}catch(err){}
+  if(cancel||b.d===0){render();return}
+  var ns=b.s0+b.d,ne=b.hasNext?b.e0+b.d:b.e0;
+  openModal({kind:'time',sec:b.id,date:ui.date,scope:'day',sMin:ns,eMin:ne,fromDrag:true});
+}
+document.addEventListener('pointerup',function(e){endBdrag(e,false)});
+document.addEventListener('pointercancel',function(e){endBdrag(e,true)});
 /* ---------- drag to reorder ---------- */
 var drag=null,dragRaf=0;
 function applyOrder(ids){
