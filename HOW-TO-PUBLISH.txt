@@ -1,0 +1,31 @@
+DAYBLOCK: put it online as an installable app (free)
+
+Files in this folder (upload ALL of them, keep the same names):
+  index.html, sw.js, manifest.webmanifest,
+  icon-192.png, icon-512.png, icon-maskable-512.png, apple-touch-icon.png
+
+OPTION A - GitHub Pages (no commands needed)
+ 1. Sign in at github.com and click New repository. Name it dayblock, set it to Public, tick "Add a README", click Create.
+ 2. In the repository click Add file > Upload files. Drag in all the files above (not the folder itself). Click Commit changes.
+ 3. Go to Settings > Pages. Under "Build and deployment" choose Source: Deploy from a branch, Branch: main, folder /(root). Save.
+ 4. Wait about a minute. Your address will be:  https://YOUR-USERNAME.github.io/dayblock/
+
+OPTION B - Netlify (even quicker)
+ 1. Go to app.netlify.com, sign up free, open Sites, and drag this whole folder onto the "Drag and drop your site output folder here" area.
+ 2. Netlify gives you an address like https://random-name.netlify.app. You can rename it in Site configuration.
+
+INSTALL ON YOUR PHONE
+ Android (Chrome): open the address, tap the three dots, then "Install app" (or "Add to Home screen").
+ iPhone (Safari): open the address, tap Share, then "Add to Home Screen".
+ After the first visit it opens instantly from the icon, even with no internet.
+
+MOVE YOUR OLD DATA ACROSS (the new address is a different place, so it starts empty)
+ 1. In the OLD Dayblock tap "Backup or restore" and "Copy backup".
+ 2. Open the NEW app, tap "Backup or restore", paste into "Restore from a backup", tap Restore.
+
+IMPORTANT
+ Your data is saved on that phone only. Clearing the browser's site data deletes it.
+ Copy a backup now and then (the app reminds you) and send it to yourself.
+
+UPDATING LATER
+ When you change index.html, also change VERSION in sw.js (dayblock-v1 to dayblock-v2), then upload both files again.
